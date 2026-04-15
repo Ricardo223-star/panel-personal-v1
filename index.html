@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0c0d0d">
+    <title>Panel diario</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow" id="dateLabel">Cargando fecha</p>
+          <h1>Panel diario</h1>
+          <p class="greeting" id="greetingLabel">Cargando saludo</p>
+        </div>
+
+        <div class="clock-box" aria-label="Hora actual">
+          <span id="clockLabel">--:--:--</span>
+          <small>Hora local</small>
+        </div>
+      </header>
+
+      <section class="panel search-panel" aria-labelledby="searchTitle">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Buscar</p>
+            <h2 id="searchTitle">Buscador universal</h2>
+          </div>
+        </div>
+
+        <form class="search-form" id="searchForm">
+          <input id="searchInput" type="search" placeholder="Bitcoin hoy, dólar blue, clima..." autocomplete="off">
+          <select id="searchTarget" aria-label="Destino de búsqueda">
+            <option value="google">Google</option>
+            <option value="news">Google Noticias</option>
+            <option value="maps">Google Maps</option>
+            <option value="youtube">YouTube</option>
+            <option value="tradingview">TradingView</option>
+          </select>
+          <button type="submit">Buscar</button>
+        </form>
+
+        <div class="quick-searches" aria-label="Búsquedas rápidas">
+          <button type="button" data-query="BTC precio hoy">BTC hoy</button>
+          <button type="button" data-query="ETH precio hoy">ETH hoy</button>
+          <button type="button" data-query="dólar blue hoy Argentina">Dólar blue</button>
+          <button type="button" data-query="riesgo país Argentina hoy">Riesgo país</button>
+        </div>
+      </section>
+
+      <section class="dashboard-grid" aria-label="Paneles principales">
+        <article class="panel" aria-labelledby="weatherTitle">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow" id="weatherLocation">Buenos Aires</p>
+              <h2 id="weatherTitle">Clima actual</h2>
+            </div>
+            <button class="ghost-button" type="button" id="weatherLocationButton">Mi ubicación</button>
+          </div>
+
+          <div class="primary-metric">
+            <strong id="weatherTemp">--°</strong>
+            <span id="weatherSummary">Sin datos todavía</span>
+          </div>
+
+          <dl class="metric-list">
+            <div>
+              <dt>Sensación</dt>
+              <dd id="weatherFeels">--</dd>
+            </div>
+            <div>
+              <dt>Humedad</dt>
+              <dd id="weatherHumidity">--</dd>
+            </div>
+            <div>
+              <dt>Viento</dt>
+              <dd id="weatherWind">--</dd>
+            </div>
+          </dl>
+
+          <p class="status-line" id="weatherStatus">Actualizando clima...</p>
+        </article>
+
+        <article class="panel" aria-labelledby="economyTitle">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Mercado</p>
+              <h2 id="economyTitle">Economía</h2>
+            </div>
+            <button class="ghost-button" type="button" id="economyRefreshButton">Actualizar</button>
+          </div>
+
+          <div class="market-list" id="marketList">
+            <p class="empty-state">Actualizando datos...</p>
+          </div>
+
+          <p class="status-line" id="economyStatus">Sin actualización todavía</p>
+        </article>
+
+        <article class="panel" aria-labelledby="notesTitle">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Local</p>
+              <h2 id="notesTitle">Notas rápidas</h2>
+            </div>
+          </div>
+
+          <form class="entry-form" id="noteForm">
+            <textarea id="noteInput" rows="3" placeholder="Escribir una nota breve"></textarea>
+            <button type="submit">Guardar nota</button>
+          </form>
+
+          <div class="item-list" id="notesList" aria-live="polite"></div>
+        </article>
+
+        <article class="panel" aria-labelledby="tasksTitle">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Pendientes</p>
+              <h2 id="tasksTitle">Tareas</h2>
+            </div>
+          </div>
+
+          <form class="entry-form inline-form" id="taskForm">
+            <input id="taskInput" type="text" placeholder="Nueva tarea" autocomplete="off">
+            <button type="submit">Agregar</button>
+          </form>
+
+          <div class="item-list" id="tasksList" aria-live="polite"></div>
+        </article>
+
+        <article class="panel links-panel" aria-labelledby="linksTitle">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Accesos</p>
+              <h2 id="linksTitle">Enlaces útiles</h2>
+            </div>
+          </div>
+
+          <div class="link-grid" id="linksList"></div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
