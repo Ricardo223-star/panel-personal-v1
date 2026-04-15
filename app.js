@@ -4,6 +4,14 @@ const STORAGE = {
   apiCache: "panel-v1-api-cache:"
 };
 
+const FETCH_TIMEOUT_MS = 7000;
+const CACHE_TTL = {
+  weather: 30 * 60 * 1000,
+  economy: 10 * 60 * 1000,
+  news: 20 * 60 * 1000,
+  holidays: 24 * 60 * 60 * 1000
+};
+
 const DEFAULT_WEATHER = {
   label: "Buenos Aires",
   latitude: -34.61,
@@ -29,6 +37,65 @@ const LINKS = [
   { label: "ARCA", url: "https://www.arca.gob.ar/" }
 ];
 
+const EMERGENCY_LINKS = [
+  { label: "911", detail: "Emergencias", url: "tel:911" },
+  { label: "100", detail: "Bomberos", url: "tel:100" },
+  { label: "107", detail: "Emergencias médicas", url: "tel:107" },
+  { label: "103", detail: "Defensa Civil", url: "tel:103" },
+  { label: "144", detail: "Violencia de género", url: "tel:144" },
+  { label: "135", detail: "Asistencia al suicida", url: "tel:135" }
+];
+
+const TRAVEL_LINKS = [
+  { label: "Buscar vuelo", detail: "Google Flights", url: "https://www.google.com/travel/flights" },
+  { label: "Ezeiza", detail: "Aeropuerto EZE", url: "https://www.aeropuertosargentina.com.ar/es/EZE" },
+  { label: "Aeroparque", detail: "Aeropuerto AEP", url: "https://www.aeropuertosargentina.com.ar/es/AEP" },
+  { label: "Partidas", detail: "Buscar salidas", url: "https://www.google.com/search?q=partidas+Ezeiza+Aeroparque+hoy" },
+  { label: "Arribos", detail: "Buscar llegadas", url: "https://www.google.com/search?q=arribos+Ezeiza+Aeroparque+hoy" },
+  { label: "Migraciones", detail: "Argentina.gob.ar", url: "https://www.argentina.gob.ar/interior/migraciones" }
+];
+
+const TREND_LINKS = [
+  { label: "Tendencias", detail: "X / Twitter", url: "https://x.com/explore/tabs/trending" },
+  { label: "Argentina", detail: "Búsqueda en X", url: "https://x.com/search?q=Argentina&src=typed_query&f=live" },
+  { label: "Dólar", detail: "Búsqueda en X", url: "https://x.com/search?q=d%C3%B3lar%20Argentina&src=typed_query&f=live" },
+  { label: "BTC", detail: "Búsqueda en X", url: "https://x.com/search?q=BTC&src=typed_query&f=live" }
+];
+
+const NEWS_RSS_URL = "https://news.google.com/rss?hl=es-419&gl=AR&ceid=AR:es-419";
+const NEWS_PROXY_URL = `https://api.allorigins.win/raw?url=${encodeURIComponent(NEWS_RSS_URL)}`;
+
+const NEWS_FALLBACK_LINKS = [
+  { label: "Google News", detail: "Portada Argentina", url: "https://news.google.com/topstories?hl=es-419&gl=AR&ceid=AR:es-419" },
+  { label: "Economía", detail: "Noticias recientes", url: "https://news.google.com/search?q=econom%C3%ADa%20Argentina&hl=es-419&gl=AR&ceid=AR:es-419" },
+  { label: "Mercados", detail: "Dólar, cripto y bolsa", url: "https://news.google.com/search?q=d%C3%B3lar%20cripto%20acciones%20Argentina&hl=es-419&gl=AR&ceid=AR:es-419" },
+  { label: "Mundo", detail: "Titulares globales", url: "https://news.google.com/search?q=mundo&hl=es-419&gl=AR&ceid=AR:es-419" }
+];
+
+const STATIC_HOLIDAYS = {
+  2026: [
+    { fecha: "2026-01-01", nombre: "Año Nuevo" },
+    { fecha: "2026-02-16", nombre: "Carnaval" },
+    { fecha: "2026-02-17", nombre: "Carnaval" },
+    { fecha: "2026-03-23", nombre: "Feriado turístico" },
+    { fecha: "2026-03-24", nombre: "Día de la Memoria" },
+    { fecha: "2026-04-02", nombre: "Malvinas" },
+    { fecha: "2026-04-03", nombre: "Viernes Santo" },
+    { fecha: "2026-05-01", nombre: "Día del Trabajador" },
+    { fecha: "2026-05-25", nombre: "Revolución de Mayo" },
+    { fecha: "2026-06-15", nombre: "General Martín Güemes" },
+    { fecha: "2026-06-20", nombre: "General Manuel Belgrano" },
+    { fecha: "2026-07-09", nombre: "Día de la Independencia" },
+    { fecha: "2026-07-10", nombre: "Feriado turístico" },
+    { fecha: "2026-08-17", nombre: "General José de San Martín" },
+    { fecha: "2026-10-12", nombre: "Diversidad Cultural" },
+    { fecha: "2026-11-23", nombre: "Soberanía Nacional" },
+    { fecha: "2026-12-07", nombre: "Feriado turístico" },
+    { fecha: "2026-12-08", nombre: "Inmaculada Concepción" },
+    { fecha: "2026-12-25", nombre: "Navidad" }
+  ]
+};
+
 const WEATHER_CODES = {
   0: "Despejado",
   1: "Mayormente despejado",
@@ -50,7 +117,9 @@ const WEATHER_CODES = {
 
 const state = {
   notes: loadList(STORAGE.notes),
-  tasks: loadList(STORAGE.tasks)
+  tasks: loadList(STORAGE.tasks),
+  calendarDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  holidaysByYear: {}
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -58,12 +127,17 @@ const $ = (selector) => document.querySelector(selector);
 document.addEventListener("DOMContentLoaded", () => {
   bindEvents();
   renderLinks();
+  renderQuickLinks("#emergencyList", EMERGENCY_LINKS);
+  renderQuickLinks("#travelList", TRAVEL_LINKS);
+  renderQuickLinks("#trendsList", TREND_LINKS);
   renderNotes();
   renderTasks();
   updateHeader();
   setInterval(updateHeader, 1000);
   loadWeather(DEFAULT_WEATHER);
   loadEconomy();
+  loadNewsHeadlines();
+  setupCalendar();
 });
 
 function bindEvents() {
@@ -74,12 +148,17 @@ function bindEvents() {
   });
 
   $("#weatherLocationButton").addEventListener("click", useCurrentLocation);
-  $("#economyRefreshButton").addEventListener("click", loadEconomy);
+  $("#economyRefreshButton").addEventListener("click", () => loadEconomy({ forceRefresh: true }));
   $("#noteForm").addEventListener("submit", addNote);
   $("#taskForm").addEventListener("submit", addTask);
   $("#notesList").addEventListener("click", handleNoteAction);
   $("#tasksList").addEventListener("click", handleTaskAction);
   $("#tasksList").addEventListener("change", handleTaskAction);
+  $("#previousMonthButton").addEventListener("click", () => changeCalendarMonth(-1));
+  $("#nextMonthButton").addEventListener("click", () => changeCalendarMonth(1));
+  $("#exportBackupButton").addEventListener("click", exportBackup);
+  $("#importBackupButton").addEventListener("click", () => $("#backupFileInput").click());
+  $("#backupFileInput").addEventListener("change", importBackup);
 }
 
 function updateHeader() {
@@ -100,12 +179,13 @@ function updateHeader() {
     second: "2-digit"
   }).format(now);
 
-  $("#greetingLabel").textContent = `${greeting}. Datos rápidos para decidir sin ruido.`;
+  $("#greetingLabel").textContent = `${greeting}. Clima, mercado y notas en un vistazo.`;
 }
 
-async function loadWeather(place) {
+async function loadWeather(place, options = {}) {
   setText("#weatherStatus", "Actualizando clima...");
   setText("#weatherLocation", place.label);
+  setText("#summaryWeatherMeta", place.label);
 
   const params = new URLSearchParams({
     latitude: place.latitude,
@@ -115,24 +195,32 @@ async function loadWeather(place) {
   });
 
   try {
-    const result = await fetchJson(`https://api.open-meteo.com/v1/forecast?${params}`, `weather-${place.latitude}-${place.longitude}`);
-    renderWeather(result.data, result.cached);
+    const result = await fetchJson(`https://api.open-meteo.com/v1/forecast?${params}`, `weather-${place.latitude}-${place.longitude}`, {
+      ttlMs: CACHE_TTL.weather,
+      forceRefresh: options.forceRefresh
+    });
+    renderWeather(result.data, result, place.label);
   } catch (error) {
     setText("#weatherStatus", "No se pudo actualizar el clima.");
+    setText("#summaryWeather", "--");
+    setText("#summaryWeatherMeta", "Sin datos");
   }
 }
 
-function renderWeather(data, cached) {
+function renderWeather(data, cacheInfo, placeLabel) {
   const current = data.current || {};
   const units = data.current_units || {};
   const code = Number(current.weather_code);
+  const summary = WEATHER_CODES[code] || "Condición no disponible";
 
   setText("#weatherTemp", formatNumber(current.temperature_2m, 0, units.temperature_2m || "°C"));
-  setText("#weatherSummary", WEATHER_CODES[code] || "Condición no disponible");
+  setText("#weatherSummary", summary);
   setText("#weatherFeels", formatNumber(current.apparent_temperature, 0, units.apparent_temperature || "°C"));
   setText("#weatherHumidity", formatNumber(current.relative_humidity_2m, 0, units.relative_humidity_2m || "%"));
   setText("#weatherWind", formatNumber(current.wind_speed_10m, 0, units.wind_speed_10m || "km/h"));
-  setText("#weatherStatus", cached ? "Mostrando último clima guardado." : `Actualizado ${formatTime(new Date())}`);
+  setText("#weatherStatus", cacheStatusText(cacheInfo, "clima"));
+  setText("#summaryWeather", formatTemperatureShort(current.temperature_2m));
+  setText("#summaryWeatherMeta", `${placeLabel}: ${summary}`);
 }
 
 function useCurrentLocation() {
@@ -155,25 +243,38 @@ function useCurrentLocation() {
   );
 }
 
-async function loadEconomy() {
+async function loadEconomy(options = {}) {
   const marketList = $("#marketList");
   marketList.innerHTML = `<p class="empty-state">Actualizando datos...</p>`;
   setText("#economyStatus", "Consultando fuentes públicas...");
 
   const requests = {
-    btc: fetchJson("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT", "btc"),
-    eth: fetchJson("https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT", "eth"),
-    blue: fetchJson("https://dolarapi.com/v1/dolares/blue", "dolar-blue"),
-    official: fetchJson("https://dolarapi.com/v1/dolares/oficial", "dolar-oficial"),
-    risk: fetchJson("https://api.argentinadatos.com/v1/finanzas/indices/riesgo-pais/ultimo", "riesgo-pais")
+    btc: fetchJson("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT", "btc", {
+      ttlMs: CACHE_TTL.economy,
+      forceRefresh: options.forceRefresh
+    }),
+    eth: fetchJson("https://api.binance.com/api/v3/ticker/24hr?symbol=ETHUSDT", "eth", {
+      ttlMs: CACHE_TTL.economy,
+      forceRefresh: options.forceRefresh
+    }),
+    blue: fetchJson("https://dolarapi.com/v1/dolares/blue", "dolar-blue", {
+      ttlMs: CACHE_TTL.economy,
+      forceRefresh: options.forceRefresh
+    }),
+    official: fetchJson("https://dolarapi.com/v1/dolares/oficial", "dolar-oficial", {
+      ttlMs: CACHE_TTL.economy,
+      forceRefresh: options.forceRefresh
+    }),
+    risk: fetchJson("https://api.argentinadatos.com/v1/finanzas/indices/riesgo-pais/ultimo", "riesgo-pais", {
+      ttlMs: CACHE_TTL.economy,
+      forceRefresh: options.forceRefresh
+    })
   };
 
   const results = await settleObject(requests);
   const rows = [];
-  let cacheCount = 0;
 
   if (results.btc.ok) {
-    cacheCount += Number(results.btc.value.cached);
     rows.push({
       name: "BTC",
       detail: "Bitcoin / USDT",
@@ -183,7 +284,6 @@ async function loadEconomy() {
   }
 
   if (results.eth.ok) {
-    cacheCount += Number(results.eth.value.cached);
     rows.push({
       name: "ETH",
       detail: "Ethereum / USDT",
@@ -193,7 +293,6 @@ async function loadEconomy() {
   }
 
   if (results.blue.ok) {
-    cacheCount += Number(results.blue.value.cached);
     rows.push({
       name: "Dólar blue",
       detail: "Venta / compra",
@@ -203,7 +302,6 @@ async function loadEconomy() {
   }
 
   if (results.official.ok) {
-    cacheCount += Number(results.official.value.cached);
     rows.push({
       name: "Dólar oficial",
       detail: "Venta / compra",
@@ -213,7 +311,6 @@ async function loadEconomy() {
   }
 
   if (results.risk.ok) {
-    cacheCount += Number(results.risk.value.cached);
     rows.push({
       name: "Riesgo país",
       detail: "Dato secundario",
@@ -223,13 +320,12 @@ async function loadEconomy() {
   }
 
   renderMarketRows(rows);
+  updateEconomySummary(results);
 
   if (rows.length === 0) {
     setText("#economyStatus", "No se pudo actualizar economía.");
-  } else if (cacheCount > 0) {
-    setText("#economyStatus", "Algunos datos vienen del último guardado local.");
   } else {
-    setText("#economyStatus", `Actualizado ${formatTime(new Date())}`);
+    setText("#economyStatus", batchCacheStatusText(results, "economía"));
   }
 }
 
@@ -265,6 +361,38 @@ function renderMarketRows(rows) {
     item.append(label, valueBox);
     marketList.append(item);
   });
+}
+
+function updateEconomySummary(results) {
+  if (results.btc.ok) {
+    const data = results.btc.value.data;
+    setSummary("#summaryBtc", "#summaryBtcMeta", formatCurrency(Number(data.lastPrice), "USD", 0), formatPercent(Number(data.priceChangePercent)));
+  } else {
+    setSummary("#summaryBtc", "#summaryBtcMeta", "--", "Sin datos");
+  }
+
+  if (results.eth.ok) {
+    const data = results.eth.value.data;
+    setSummary("#summaryEth", "#summaryEthMeta", formatCurrency(Number(data.lastPrice), "USD", 0), formatPercent(Number(data.priceChangePercent)));
+  } else {
+    setSummary("#summaryEth", "#summaryEthMeta", "--", "Sin datos");
+  }
+
+  if (results.blue.ok) {
+    const data = results.blue.value.data;
+    setSummary("#summaryDollar", "#summaryDollarMeta", formatCurrency(Number(data.venta), "ARS", 0), `Compra ${formatCurrency(Number(data.compra), "ARS", 0)}`);
+  } else {
+    setSummary("#summaryDollar", "#summaryDollarMeta", "--", "Sin datos");
+  }
+}
+
+function setSummary(valueSelector, metaSelector, value, meta) {
+  const valueElement = $(valueSelector);
+  const metaElement = $(metaSelector);
+  valueElement.textContent = value;
+  metaElement.textContent = meta;
+  valueElement.className = getChangeClass(meta);
+  metaElement.className = getChangeClass(meta);
 }
 
 function addNote(event) {
@@ -354,7 +482,9 @@ function renderTasks() {
     return;
   }
 
-  state.tasks.forEach((task) => {
+  const orderedTasks = [...state.tasks].sort((a, b) => Number(a.done) - Number(b.done));
+
+  orderedTasks.forEach((task) => {
     const item = document.createElement("article");
     item.className = `task-item ${task.done ? "done" : ""}`;
 
@@ -398,6 +528,86 @@ function handleTaskAction(event) {
   }
 }
 
+function exportBackup() {
+  const payload = {
+    app: "mi-panel",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    notes: state.notes,
+    tasks: state.tasks
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `mi-panel-backup-${dateKeyFromDate(new Date())}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  setText("#backupStatus", "Backup exportado con notas y tareas.");
+}
+
+async function importBackup(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!Array.isArray(data.notes) || !Array.isArray(data.tasks)) {
+      throw new Error("Formato inválido");
+    }
+
+    const notes = normalizeBackupNotes(data.notes);
+    const tasks = normalizeBackupTasks(data.tasks);
+
+    const confirmed = confirm(`Esto reemplaza tus datos actuales por ${notes.length} notas y ${tasks.length} tareas del backup. ¿Continuar?`);
+    if (!confirmed) {
+      setText("#backupStatus", "Importación cancelada.");
+      return;
+    }
+
+    state.notes = notes;
+    state.tasks = tasks;
+    saveList(STORAGE.notes, state.notes);
+    saveList(STORAGE.tasks, state.tasks);
+    renderNotes();
+    renderTasks();
+    setText("#backupStatus", "Backup importado correctamente.");
+  } catch (error) {
+    setText("#backupStatus", "No se pudo importar el archivo JSON.");
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function normalizeBackupNotes(notes) {
+  if (!Array.isArray(notes)) return [];
+
+  return notes
+    .map((note) => ({
+      id: String(note.id || makeId()),
+      text: String(note.text || "").trim(),
+      createdAt: isValidDate(note.createdAt) ? note.createdAt : new Date().toISOString()
+    }))
+    .filter((note) => note.text);
+}
+
+function normalizeBackupTasks(tasks) {
+  if (!Array.isArray(tasks)) return [];
+
+  return tasks
+    .map((task) => ({
+      id: String(task.id || makeId()),
+      text: String(task.text || "").trim(),
+      done: Boolean(task.done)
+    }))
+    .filter((task) => task.text);
+}
+
 function renderLinks() {
   const list = $("#linksList");
   list.innerHTML = "";
@@ -410,6 +620,226 @@ function renderLinks() {
     item.textContent = link.label;
     list.append(item);
   });
+}
+
+function renderQuickLinks(selector, links) {
+  const list = $(selector);
+  list.innerHTML = "";
+
+  links.forEach((link) => {
+    const item = document.createElement("a");
+    item.href = link.url;
+
+    if (!link.url.startsWith("tel:")) {
+      item.target = "_blank";
+      item.rel = "noopener noreferrer";
+    }
+
+    const label = document.createElement("strong");
+    const detail = document.createElement("span");
+    label.textContent = link.label;
+    detail.textContent = link.detail;
+    item.append(label, detail);
+    list.append(item);
+  });
+}
+
+async function loadNewsHeadlines() {
+  setText("#newsStatus", "Buscando titulares...");
+
+  try {
+    const result = await fetchText(NEWS_PROXY_URL, "news-headlines", {
+      ttlMs: CACHE_TTL.news
+    });
+    const headlines = parseNewsRss(result.data);
+
+    if (!headlines.length) throw new Error("Sin titulares");
+
+    renderNewsHeadlines(headlines, result);
+  } catch (error) {
+    renderNewsFallback();
+  }
+}
+
+function parseNewsRss(xmlText) {
+  const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+  if (xml.querySelector("parsererror")) return [];
+
+  return [...xml.querySelectorAll("item")].slice(0, 5).map((item) => ({
+    title: cleanNewsTitle(item.querySelector("title")?.textContent || "Titular"),
+    source: item.querySelector("source")?.textContent || "Google News",
+    url: item.querySelector("link")?.textContent || "https://news.google.com/",
+    date: item.querySelector("pubDate")?.textContent || ""
+  }));
+}
+
+function cleanNewsTitle(title) {
+  return title.replace(/\s+-\s+[^-]+$/, "").trim();
+}
+
+function renderNewsHeadlines(headlines, cacheInfo) {
+  const list = $("#newsList");
+  list.innerHTML = "";
+
+  headlines.forEach((headline) => {
+    const item = document.createElement("a");
+    item.href = headline.url;
+    item.target = "_blank";
+    item.rel = "noopener noreferrer";
+
+    const title = document.createElement("strong");
+    const meta = document.createElement("span");
+    title.textContent = headline.title;
+    meta.textContent = [headline.source, formatNewsDate(headline.date)].filter(Boolean).join(" · ");
+    item.append(title, meta);
+    list.append(item);
+  });
+
+  setText("#newsStatus", cacheStatusText(cacheInfo, "noticias"));
+}
+
+function renderNewsFallback() {
+  const list = $("#newsList");
+  list.innerHTML = "";
+
+  NEWS_FALLBACK_LINKS.forEach((link) => {
+    const item = document.createElement("a");
+    item.href = link.url;
+    item.target = "_blank";
+    item.rel = "noopener noreferrer";
+
+    const label = document.createElement("strong");
+    const detail = document.createElement("span");
+    label.textContent = link.label;
+    detail.textContent = link.detail;
+    item.append(label, detail);
+    list.append(item);
+  });
+
+  setText("#newsStatus", "No se cargaron titulares automáticos. Quedan accesos directos.");
+}
+
+async function setupCalendar() {
+  renderCalendar();
+  await loadHolidaysForYear(state.calendarDate.getFullYear());
+  renderCalendar();
+}
+
+async function changeCalendarMonth(offset) {
+  const current = state.calendarDate;
+  state.calendarDate = new Date(current.getFullYear(), current.getMonth() + offset, 1);
+  renderCalendar();
+  await loadHolidaysForYear(state.calendarDate.getFullYear());
+  renderCalendar();
+}
+
+async function loadHolidaysForYear(year) {
+  if (state.holidaysByYear[year]) return;
+
+  setText("#calendarStatus", "Cargando feriados...");
+
+  try {
+    const result = await fetchJson(`https://api.argentinadatos.com/v1/feriados/${year}`, `holidays-${year}`, {
+      ttlMs: CACHE_TTL.holidays
+    });
+    state.holidaysByYear[year] = normalizeHolidays(result.data);
+    setText("#calendarStatus", cacheStatusText(result, "feriados"));
+  } catch (error) {
+    state.holidaysByYear[year] = normalizeHolidays(STATIC_HOLIDAYS[year] || []);
+    setText("#calendarStatus", state.holidaysByYear[year].length
+      ? "Feriados cargados desde respaldo local."
+      : "No hay feriados cargados para este año.");
+  }
+}
+
+function normalizeHolidays(holidays) {
+  if (!Array.isArray(holidays)) return [];
+
+  return holidays
+    .map((holiday) => ({
+      fecha: holiday.fecha,
+      nombre: holiday.nombre || holiday.motivo || "Feriado"
+    }))
+    .filter((holiday) => /^\d{4}-\d{2}-\d{2}$/.test(holiday.fecha));
+}
+
+function renderCalendar() {
+  const viewDate = state.calendarDate;
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const holidays = state.holidaysByYear[year] || normalizeHolidays(STATIC_HOLIDAYS[year] || []);
+  const holidayMap = new Map(holidays.map((holiday) => [holiday.fecha, holiday]));
+  const daysContainer = $("#calendarDays");
+
+  $("#calendarMonth").textContent = formatMonthLabel(viewDate);
+  daysContainer.innerHTML = "";
+
+  const firstWeekday = mondayFirstDay(new Date(year, month, 1).getDay());
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let i = 0; i < firstWeekday; i += 1) {
+    const empty = document.createElement("div");
+    empty.className = "calendar-day empty";
+    daysContainer.append(empty);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const key = dateKey(year, month, day);
+    const holiday = holidayMap.get(key);
+    const item = document.createElement("div");
+    item.className = "calendar-day";
+    item.textContent = day;
+
+    if (isToday(year, month, day)) item.classList.add("today");
+
+    if (holiday) {
+      item.classList.add("holiday");
+      item.title = holiday.nombre;
+      item.setAttribute("aria-label", `${day}, ${holiday.nombre}`);
+    }
+
+    daysContainer.append(item);
+  }
+
+  renderHolidayList(holidays.filter((holiday) => {
+    const parts = holiday.fecha.split("-");
+    return Number(parts[0]) === year && Number(parts[1]) === month + 1;
+  }));
+  renderNextHoliday(holidays);
+}
+
+function renderHolidayList(monthHolidays) {
+  const list = $("#holidayList");
+  list.innerHTML = "";
+
+  if (!monthHolidays.length) {
+    list.innerHTML = `<p class="empty-state">Sin feriados cargados para este mes.</p>`;
+    return;
+  }
+
+  monthHolidays.forEach((holiday) => {
+    const parts = holiday.fecha.split("-");
+    const item = document.createElement("div");
+    item.className = "holiday-item";
+
+    const day = document.createElement("strong");
+    const name = document.createElement("span");
+    day.textContent = parts[2];
+    name.textContent = holiday.nombre;
+    item.append(day, name);
+    list.append(item);
+  });
+}
+
+function renderNextHoliday(holidays) {
+  const todayKey = dateKeyFromDate(new Date());
+  const next = [...holidays]
+    .filter((holiday) => holiday.fecha >= todayKey)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
+
+  setText("#nextHolidayLine", next
+    ? `Próximo feriado: ${formatHolidayDate(next.fecha)} · ${next.nombre}`
+    : "Próximo feriado: sin datos cargados.");
 }
 
 function handleSearch(event) {
@@ -425,23 +855,83 @@ function openSearch(query, target) {
   window.open(`${base}${encodeURIComponent(query)}`, "_blank", "noopener,noreferrer");
 }
 
-async function fetchJson(url, cacheKey) {
+async function fetchJson(url, cacheKey, options = {}) {
+  return fetchWithCache(url, cacheKey, { ...options, responseType: "json" });
+}
+
+async function fetchText(url, cacheKey, options = {}) {
+  return fetchWithCache(url, cacheKey, { ...options, responseType: "text" });
+}
+
+async function fetchWithCache(url, cacheKey, options = {}) {
   const storageKey = `${STORAGE.apiCache}${cacheKey}`;
+  const cached = readCache(storageKey);
+  const ttlMs = options.ttlMs || 0;
+
+  if (!options.forceRefresh && cached && isCacheFresh(cached, ttlMs)) {
+    return {
+      data: cached.data,
+      source: "cache",
+      cached: true,
+      stale: false,
+      savedAt: cached.savedAt
+    };
+  }
 
   try {
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetchWithTimeout(url, { cache: "no-store" }, options.timeoutMs || FETCH_TIMEOUT_MS);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    const data = await response.json();
+    const data = options.responseType === "text" ? await response.text() : await response.json();
     localStorage.setItem(storageKey, JSON.stringify({ data, savedAt: Date.now() }));
-    return { data, cached: false };
+    return {
+      data,
+      source: "network",
+      cached: false,
+      stale: false,
+      savedAt: Date.now()
+    };
   } catch (error) {
-    const cached = localStorage.getItem(storageKey);
     if (!cached) throw error;
 
-    const parsed = JSON.parse(cached);
-    return { data: parsed.data, cached: true };
+    return {
+      data: cached.data,
+      source: "stale",
+      cached: true,
+      stale: true,
+      savedAt: cached.savedAt,
+      error
+    };
   }
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function readCache(storageKey) {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || !("data" in parsed) || !parsed.savedAt) return null;
+    return parsed;
+  } catch (error) {
+    return null;
+  }
+}
+
+function isCacheFresh(cached, ttlMs) {
+  if (!ttlMs) return false;
+  return Date.now() - Number(cached.savedAt) <= ttlMs;
 }
 
 async function settleObject(requests) {
@@ -493,6 +983,12 @@ function formatNumber(value, digits, suffix) {
   return `${formatPlainNumber(number, digits)} ${suffix}`;
 }
 
+function formatTemperatureShort(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "--";
+  return `${formatPlainNumber(number, 0)}°`;
+}
+
 function formatPlainNumber(value, digits) {
   if (!Number.isFinite(value)) return "--";
   return new Intl.NumberFormat("es-AR", {
@@ -513,6 +1009,82 @@ function getChangeClass(value) {
   return "";
 }
 
+function cacheStatusText(cacheInfo, label) {
+  if (cacheInfo.source === "network") return `${capitalize(label)} actualizado ${formatTime(new Date())}.`;
+  if (cacheInfo.source === "cache") return `${capitalize(label)} desde cache reciente.`;
+  if (cacheInfo.source === "stale") return `${capitalize(label)} desde backup local por falla de conexión.`;
+  return `${capitalize(label)} sin estado.`;
+}
+
+function batchCacheStatusText(results, label) {
+  const entries = Object.values(results);
+  const values = entries.filter((result) => result.ok).map((result) => result.value);
+  const hasFailure = entries.some((result) => !result.ok);
+  if (!values.length) return `No se pudo actualizar ${label}.`;
+  if (values.some((value) => value.source === "stale")) return `${capitalize(label)} con algunos datos de backup local.`;
+  if (hasFailure) return `${capitalize(label)} actualizado parcialmente.`;
+  if (values.every((value) => value.source === "cache")) return `${capitalize(label)} desde cache reciente.`;
+  if (values.some((value) => value.source === "cache")) return `${capitalize(label)} actualizado parcialmente; algunos datos venían de cache.`;
+  return `${capitalize(label)} actualizado ${formatTime(new Date())}.`;
+}
+
+function capitalize(value) {
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+function dateKey(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function dateKeyFromDate(date) {
+  return dateKey(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function mondayFirstDay(day) {
+  return day === 0 ? 6 : day - 1;
+}
+
+function isToday(year, month, day) {
+  const today = new Date();
+  return today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+}
+
+function formatMonthLabel(date) {
+  return new Intl.DateTimeFormat("es-AR", {
+    month: "long",
+    year: "numeric"
+  }).format(date);
+}
+
+function formatHolidayDate(value) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "numeric",
+    month: "long"
+  }).format(new Date(year, month - 1, day));
+}
+
+function formatNewsDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const today = dateKeyFromDate(new Date());
+  const itemDay = dateKeyFromDate(date);
+
+  if (today === itemDay) {
+    return new Intl.DateTimeFormat("es-AR", {
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+  }
+
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit"
+  }).format(date);
+}
+
 function formatTime(date) {
   return new Intl.DateTimeFormat("es-AR", {
     hour: "2-digit",
@@ -527,4 +1099,8 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function isValidDate(value) {
+  return value && !Number.isNaN(new Date(value).getTime());
 }
